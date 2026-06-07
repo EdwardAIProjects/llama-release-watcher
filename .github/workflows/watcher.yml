@@ -100,6 +100,7 @@ jobs:
   push_to_registry:
     name: Build and push CUDA Docker images
     needs: [check, prepare_matrices]
+    if: needs.check.outputs.new_release == 'true'
     runs-on: ${{ matrix.config.runs_on }}
     strategy:
       fail-fast: false
@@ -137,7 +138,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          IMAGE_REPO="${{ env.IMAGE_REPO }}"
+          IMAGE_REPO="$(echo "${{ env.IMAGE_REPO }}" | tr '[:upper:]' '[:lower:]')"
           PREFIX="${IMAGE_REPO}:"
           PLATFORM="${{ matrix.config.platforms }}"
           ARCH_SUFFIX="${PLATFORM#linux/}"
@@ -312,6 +313,7 @@ jobs:
   merge_arch_tags:
     name: Create shared CUDA tags from digests
     needs: [check, prepare_matrices, push_to_registry]
+    if: needs.check.outputs.new_release == 'true'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -353,7 +355,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          IMAGE_REPO="${{ env.IMAGE_REPO }}"
+          IMAGE_REPO="$(echo "${{ env.IMAGE_REPO }}" | tr '[:upper:]' '[:lower:]')"
           PREFIX="${IMAGE_REPO}:"
           SRC_TAG="${{ needs.check.outputs.release_tag }}"
           BUILD_DATE="${{ steps.build_date.outputs.date }}"
@@ -361,6 +363,11 @@ jobs:
           TAGS="${{ matrix.config.tag }}"
           ARCHES="${{ matrix.config.arches }}"
           DIGEST_GLOB="/tmp/digests/*.tsv"
+
+          if [[ -z "$SRC_TAG" ]]; then
+            echo "Missing release tag from check job" >&2
+            exit 1
+          fi
 
           if ! ls ${DIGEST_GLOB} >/dev/null 2>&1; then
             echo "No digest metadata found in /tmp/digests" >&2
