@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          IMAGE_REPO="ghcr.io/${{ github.repository_owner }}/llama-cpp"
+          IMAGE_REPO="ghcr.io/$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')/llama-cpp"
           PR_NUM="${{ github.event.inputs.pr }}"
           TARGET="${{ github.event.inputs.target }}"
           
