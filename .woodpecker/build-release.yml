@@ -1,0 +1,76 @@
+# Builds and pushes llama.cpp CUDA Docker images for the release tag recorded
+# in last_release_version.txt.
+#
+# Triggered by a push to main that changes last_release_version.txt — normally
+# the commit made by the Windmill watcher (windmill/f/llama_watcher/check_release.py).
+#
+# Requirements on the Woodpecker side:
+#   - Repository must be marked "trusted" (the build step mounts the Docker socket).
+#   - Secrets: ghcr_username, ghcr_token (PAT with write:packages).
+
+when:
+  - event: push
+    branch: main
+    path: last_release_version.txt
+
+matrix:
+  include:
+    - CUDA_SUFFIX: cuda12
+      CUDA_VERSION: 12.8.1
+      # cuda12 is also published under the unsuffixed "server-cuda" alias.
+      ALIAS_TAG: server-cuda
+    - CUDA_SUFFIX: cuda13
+      CUDA_VERSION: 13.3.0
+      ALIAS_TAG: ''
+
+steps:
+  build-and-push:
+    image: docker:27-cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      UPSTREAM_REPO: ggerganov/llama.cpp
+      IMAGE_REPO: ghcr.io/edwardjxli/llama-cpp
+      GHCR_USERNAME:
+        from_secret: ghcr_username
+      GHCR_TOKEN:
+        from_secret: ghcr_token
+    commands:
+      - apk add --no-cache git
+      - RELEASE_TAG="$(cat last_release_version.txt)"
+      - git clone --depth 1 --branch "$RELEASE_TAG" "https://github.com/$UPSTREAM_REPO.git" llama.cpp
+      - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+      # Registry cache export needs the docker-container buildx driver.
+      - docker buildx create --name llama-builder --driver docker-container --use 2>/dev/null || docker buildx use llama-builder
+      - |
+        set -eu
+        BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        COMMIT_SHA="$(git -C llama.cpp rev-parse HEAD)"
+
+        TAG_ARGS="-t $IMAGE_REPO:server-$CUDA_SUFFIX -t $IMAGE_REPO:server-$CUDA_SUFFIX-$RELEASE_TAG"
+        if [ -n "$ALIAS_TAG" ]; then
+          TAG_ARGS="$TAG_ARGS -t $IMAGE_REPO:$ALIAS_TAG -t $IMAGE_REPO:$ALIAS_TAG-$RELEASE_TAG"
+        fi
+
+        docker buildx build llama.cpp \
+          --file llama.cpp/.devops/cuda.Dockerfile \
+          --target server \
+          --platform linux/amd64 \
+          --push $TAG_ARGS \
+          --provenance=false \
+          --build-arg BUILD_DATE="$BUILD_DATE" \
+          --build-arg APP_VERSION="$RELEASE_TAG" \
+          --build-arg APP_REVISION="$COMMIT_SHA" \
+          --build-arg IMAGE_URL="https://github.com/$UPSTREAM_REPO" \
+          --build-arg IMAGE_SOURCE="https://github.com/$UPSTREAM_REPO" \
+          --build-arg CUDA_VERSION="$CUDA_VERSION" \
+          --build-arg CUDA_DOCKER_ARCH="86;89;90" \
+          --label org.opencontainers.image.created="$BUILD_DATE" \
+          --label org.opencontainers.image.version="$RELEASE_TAG" \
+          --label org.opencontainers.image.revision="$COMMIT_SHA" \
+          --label org.opencontainers.image.title=llama.cpp \
+          --label "org.opencontainers.image.description=LLM inference in C/C++" \
+          --label org.opencontainers.image.url="https://github.com/$UPSTREAM_REPO" \
+          --label org.opencontainers.image.source="https://github.com/$UPSTREAM_REPO" \
+          --cache-from type=registry,ref=$IMAGE_REPO:buildcache-$CUDA_SUFFIX-amd64 \
+          --cache-to type=registry,ref=$IMAGE_REPO:buildcache-$CUDA_SUFFIX-amd64,mode=max

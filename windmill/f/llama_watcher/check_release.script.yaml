@@ -1,0 +1,31 @@
+summary: Check for new llama.cpp release
+description: >-
+  Polls the GitHub API for the latest llama.cpp release. When a new tag
+  appears, commits it to last_release_version.txt and pushes using an SSH
+  deploy key; the push triggers the Woodpecker release-build pipeline.
+lock: ''
+kind: script
+schema:
+  $schema: 'https://json-schema.org/draft/2020-12/schema'
+  type: object
+  properties:
+    deploy_key:
+      type: string
+      description: >-
+        SSH private deploy key with write access to the watcher repo
+        (store as a Windmill secret variable)
+      default: ''
+    repo_ssh_url:
+      type: string
+      description: SSH clone URL of the watcher repository
+      default: 'git@github.com:EdwardJXLi/llama-release-watcher.git'
+    branch:
+      type: string
+      description: Branch to commit the version file to
+      default: main
+    github_token:
+      type: string
+      description: Optional GitHub token to raise API rate limits
+      default: ''
+  required:
+    - deploy_key

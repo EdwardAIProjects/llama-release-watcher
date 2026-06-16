@@ -1,0 +1,12 @@
+summary: Check llama.cpp releases every 5 minutes
+# Windmill cron format includes a leading seconds field.
+schedule: 0 */5 * * * *
+timezone: UTC
+script_path: f/llama_watcher/check_release
+is_flow: false
+enabled: true
+args:
+  deploy_key: $var:f/llama_watcher/deploy_key
+  repo_ssh_url: git@github.com:EdwardJXLi/llama-release-watcher.git
+  branch: main
+  github_token: ''

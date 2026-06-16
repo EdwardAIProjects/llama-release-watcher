@@ -1,47 +1,64 @@
 # Llama Release Watcher
 
-A specialized GitHub Actions pipeline that monitors the official [llama.cpp](https://github.com/ggerganov/llama.cpp) repository for new releases and automatically builds and publishes optimized CUDA Docker images to the GitHub Container Registry (GHCR).
+A pipeline that monitors the official [llama.cpp](https://github.com/ggerganov/llama.cpp) repository for new releases and automatically builds and publishes optimized CUDA Docker images to the GitHub Container Registry (GHCR).
+
+The release check runs as a [Windmill](https://www.windmill.dev/) scheduled script every 5 minutes; builds run on [Woodpecker CI](https://woodpecker-ci.org/). The two are connected through git: Windmill commits the new release tag to this repo using a deploy key, and that push triggers the Woodpecker build.
 
 ## Overview
 
 This project solves the need for automated, consistent Docker images of `llama.cpp` specifically tailored for CUDA environments without needing to maintain a full fork of the upstream repository.
 
 ### Key Features
-- **Automated Polling:** Checks for new `llama.cpp` releases every hour.
+- **Automated Polling:** A Windmill schedule checks for new `llama.cpp` releases every 5 minutes.
+- **Git as State:** The last seen release tag lives in `last_release_version.txt`, committed by Windmill — every build is traceable to a commit.
 - **Targeted Builds:** Focuses specifically on **CUDA 12** and **CUDA 13** for Linux `amd64`.
 - **Optimized Builds:** Limits CUDA compilation to modern architectures (Ampere, Ada, Hopper) to reduce build time and suppress legacy warnings.
-- **Multi-Variant Support:** Builds `full`, `light`, and `server` image targets.
-- **Upstream Integrity:** Instead of mirroring code, the workflow clones the upstream repository at the specific release tag during the build process, ensuring 100% parity with official releases.
-- **Smart Tagging:** Automatically creates multi-arch manifest tags and version-specific tags.
+- **Upstream Integrity:** Instead of mirroring code, the build clones the upstream repository at the specific release tag, ensuring 100% parity with official releases.
 
 ## Architecture
 
-The workflow follows a 5-stage pipeline:
+1. **Check (Windmill):** `windmill/f/llama_watcher/check_release.py` runs every 5 minutes. It queries the GitHub API for the latest release tag and clones this repo (shallow) to compare against `last_release_version.txt`.
+2. **Commit (Windmill):** On a new tag, the script writes the tag to `last_release_version.txt`, commits as `windmill-bot`, and pushes to `main` using an SSH deploy key stored as a Windmill secret.
+3. **Build & Push (Woodpecker):** The push triggers `.woodpecker/build-release.yml` (filtered to pushes on `main` touching `last_release_version.txt`). It clones `llama.cpp` at the committed tag and builds the `server` target of `.devops/cuda.Dockerfile` for CUDA 12 and CUDA 13 (matrix), pushing all tags to GHCR with a registry-backed build cache.
 
-1. **Check:** A Python script queries the GitHub API. If the latest release tag differs from the one stored in `last_release_version.txt`, the pipeline proceeds.
-2. **Prepare Matrices:** Generates a build matrix for the requested CUDA versions and image targets.
-3. **Push to Registry:** 
-   - Clones `llama.cpp` at the release tag.
-   - Builds images using the official `.devops/cuda.Dockerfile`.
-   - Pushes images by digest to GHCR.
-4. **Merge Tags:** Uses `docker buildx imagetools` to create human-readable tags (e.g., `full-cuda12`) from the uploaded digests.
-5. **Update State:** Commits the new release tag back to the repository to prevent redundant builds.
+If a build fails, the version file is already committed, so the watcher will not re-trigger the same tag — restart the pipeline from the Woodpecker UI.
 
 ## Setup & Configuration
 
-### Permissions
-The workflow requires the following GitHub Action permissions:
-- `contents: write` (to update the version file)
-- `packages: write` (to push images to GHCR)
+### Deploy Key
 
-### Registry Configuration
-By default, the project pushes to **GHCR**. No manual secrets are required if pushing to the same account/org as the repository, as it uses the built-in `GITHUB_TOKEN`.
+1. Generate a key pair: `ssh-keygen -t ed25519 -f llama-watcher-deploy -N '' -C windmill-bot`
+2. Add the public key as a **deploy key with write access** on this repository (GitHub → Settings → Deploy keys).
+3. Store the private key as a Windmill secret variable at `f/llama_watcher/deploy_key`.
 
-**Optional Repository Variables:**
-| Variable | Description | Default |
+### Woodpecker
+
+1. Enable this repository in Woodpecker and mark it **trusted** (the build steps mount `/var/run/docker.sock`).
+2. Add repository secrets:
+   | Secret | Description |
+   | :--- | :--- |
+   | `ghcr_username` | GitHub username to log in to GHCR |
+   | `ghcr_token` | GitHub PAT with `write:packages` |
+
+Images are pushed to `ghcr.io/edwardjxli/llama-cpp` (set in the `IMAGE_REPO` environment variable in the Woodpecker pipeline).
+
+### Windmill
+
+Push the script and schedule from the `windmill/` directory:
+
+```bash
+cd windmill
+wmill sync push
+```
+
+The schedule cron is `0 */5 * * * *` (Windmill cron includes a leading seconds field). Script arguments (preset in `check_release.schedule.yaml`):
+
+| Argument | Description | Default |
 | :--- | :--- | :--- |
-| `DOCKER_REGISTRY` | The container registry URL | `ghcr.io` |
-| `DOCKER_IMAGE_REPO` | The destination image path | `ghcr.io/<owner>/llama-cpp` |
+| `deploy_key` | SSH private key with write access (from `$var:f/llama_watcher/deploy_key`) | (required) |
+| `repo_ssh_url` | SSH clone URL of this repo | `git@github.com:EdwardJXLi/llama-release-watcher.git` |
+| `branch` | Branch to commit to | `main` |
+| `github_token` | Optional token to raise GitHub API rate limits | (none) |
 
 ## Image Tagging Convention
 
