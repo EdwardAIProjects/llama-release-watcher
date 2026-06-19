@@ -1,6 +1,6 @@
 # Llama Release Watcher
 
-A pipeline that monitors the official [llama.cpp](https://github.com/ggerganov/llama.cpp) repository for new releases and automatically builds and publishes optimized CUDA Docker images to the GitHub Container Registry (GHCR).
+A pipeline that monitors the official [llama.cpp](https://github.com/ggerganov/llama.cpp) repository for new releases and automatically builds and publishes optimized CUDA Docker images to a private Docker registry.
 
 The release check runs as a [Windmill](https://www.windmill.dev/) scheduled script every 5 minutes; builds run on [Woodpecker CI](https://woodpecker-ci.org/). The two are connected through git: Windmill commits the new release tag to this repo using a deploy key, and that push triggers the Woodpecker build.
 
@@ -19,7 +19,7 @@ This project solves the need for automated, consistent Docker images of `llama.c
 
 1. **Check (Windmill):** `windmill/f/llama_watcher/check_release.py` runs every 5 minutes. It queries the GitHub API for the latest release tag and clones this repo (shallow) to compare against `last_release_version.txt`.
 2. **Commit (Windmill):** On a new tag, the script writes the tag to `last_release_version.txt`, commits as `windmill-bot`, and pushes to `main` using an SSH deploy key stored as a Windmill secret.
-3. **Build & Push (Woodpecker):** The push triggers `.woodpecker/build-release.yml` (filtered to pushes on `main` touching `last_release_version.txt`). It clones `llama.cpp` at the committed tag and builds the `server` target of `.devops/cuda.Dockerfile` for CUDA 12 and CUDA 13 (matrix), pushing all tags to GHCR with a registry-backed build cache.
+3. **Build & Push (Woodpecker):** The push triggers `.woodpecker/build-release.yml`. It clones `llama.cpp` at the committed tag and builds the `server` target of `.devops/cuda.Dockerfile` for CUDA 12 and CUDA 13 (matrix), pushing all tags to the private registry with a registry-backed build cache.
 
 If a build fails, the version file is already committed, so the watcher will not re-trigger the same tag — restart the pipeline from the Woodpecker UI.
 
@@ -37,10 +37,11 @@ If a build fails, the version file is already committed, so the watcher will not
 2. Add repository secrets:
    | Secret | Description |
    | :--- | :--- |
-   | `ghcr_username` | GitHub username to log in to GHCR |
-   | `ghcr_token` | GitHub PAT with `write:packages` |
+   | `docker_registry` | Private registry hostname, for example `registry.example.com` |
+   | `docker_registry_username` | Username for the private registry |
+   | `docker_registry_key` | Password or access key for the private registry |
 
-Images are pushed to `ghcr.io/edwardjxli/llama-cpp` (set in the `IMAGE_REPO` environment variable in the Woodpecker pipeline).
+Images are pushed to `<docker_registry>/llama-cpp`.
 
 ### Windmill
 
