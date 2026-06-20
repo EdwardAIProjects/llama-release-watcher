@@ -56,12 +56,14 @@ awk '
     next
   }
 
-  # Route C/C++ and CUDA compilation through sccache. nvcc caching is brittle
-  # (sccache decomposes nvcc via --dryrun; multi-arch builds have historically
-  # failed at the fatbinary step), so this is re-enabled on sccache >= 0.16 to
-  # retest. If CUDA breaks again, drop -DCMAKE_CUDA_COMPILER_LAUNCHER below.
+  # Route C/C++ AND CUDA compilation through sccache. nvcc caching previously
+  # broke at the multi-arch fatbinary step with "Could not open input file
+  # *.ptx" on sccache 0.10/0.16; the theory is a parallel per-arch temp-file
+  # race that the sccache --dryrun decomposition cannot reproduce, so we force
+  # nvcc single-threaded (--threads=1) to make it deterministic. If CUDA still
+  # breaks, drop the CUDA launcher and CUDA_FLAGS below to cache only C/C++.
   /-DLLAMA_BUILD_TESTS=OFF/ {
-    sub(/-DLLAMA_BUILD_TESTS=OFF/, "-DLLAMA_BUILD_TESTS=OFF -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_CUDA_COMPILER_LAUNCHER=sccache")
+    sub(/-DLLAMA_BUILD_TESTS=OFF/, "-DLLAMA_BUILD_TESTS=OFF -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_CUDA_COMPILER_LAUNCHER=sccache -DCMAKE_CUDA_FLAGS=--threads=1")
   }
 
   # Print cache hit/miss stats once the build finishes.
