@@ -92,7 +92,7 @@ steps:
            && [ -n "$${AWS_ACCESS_KEY_ID:-}" ] && [ -n "$${AWS_SECRET_ACCESS_KEY:-}" ]; then
           echo "==> sccache enabled (bucket=$${SCCACHE_BUCKET} endpoint=$${SCCACHE_ENDPOINT})"
           sh .woodpecker/enable-sccache.sh llama.cpp/.devops/cuda.Dockerfile
-          SCCACHE_VERSION=0.10.0
+          SCCACHE_VERSION=0.16.0
           SCCACHE_REGION="$${SCCACHE_REGION:-auto}"
           SCCACHE_S3_USE_SSL="$${SCCACHE_S3_USE_SSL:-true}"
           # Namespace per CUDA toolchain so cuda12/cuda13 objects never collide.

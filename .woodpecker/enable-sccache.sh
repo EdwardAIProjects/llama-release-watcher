@@ -19,7 +19,7 @@ awk '
     print
     print ""
     print "# --- sccache integration (injected by llama-release-watcher) ---"
-    print "ARG SCCACHE_VERSION=0.10.0"
+    print "ARG SCCACHE_VERSION=0.16.0"
     print "ARG SCCACHE_BUCKET"
     print "ARG SCCACHE_ENDPOINT"
     print "ARG SCCACHE_REGION=auto"
@@ -56,12 +56,12 @@ awk '
     next
   }
 
-  # Route C/C++ compilation through sccache. CUDA/nvcc is deliberately left to
-  # compile directly: sccache mishandles the nvcc multi-stage, multi-arch build
-  # (the fatbinary step fails to find the intermediate .ptx). The CPU backend
-  # variants are C/C++ and dominate the build, so this keeps most of the win.
+  # Route C/C++ and CUDA compilation through sccache. nvcc caching is brittle
+  # (sccache decomposes nvcc via --dryrun; multi-arch builds have historically
+  # failed at the fatbinary step), so this is re-enabled on sccache >= 0.16 to
+  # retest. If CUDA breaks again, drop -DCMAKE_CUDA_COMPILER_LAUNCHER below.
   /-DLLAMA_BUILD_TESTS=OFF/ {
-    sub(/-DLLAMA_BUILD_TESTS=OFF/, "-DLLAMA_BUILD_TESTS=OFF -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache")
+    sub(/-DLLAMA_BUILD_TESTS=OFF/, "-DLLAMA_BUILD_TESTS=OFF -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_CUDA_COMPILER_LAUNCHER=sccache")
   }
 
   # Print cache hit/miss stats once the build finishes.
