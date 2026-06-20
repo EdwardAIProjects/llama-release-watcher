@@ -91,7 +91,10 @@ steps:
         if [ -n "$${SCCACHE_BUCKET:-}" ] && [ -n "$${SCCACHE_ENDPOINT:-}" ] \
            && [ -n "$${AWS_ACCESS_KEY_ID:-}" ] && [ -n "$${AWS_SECRET_ACCESS_KEY:-}" ]; then
           echo "==> sccache enabled (bucket=$${SCCACHE_BUCKET} endpoint=$${SCCACHE_ENDPOINT})"
-          sh .woodpecker/enable-sccache.sh llama.cpp/.devops/cuda.Dockerfile
+          # Cache nvcc only on CUDA 12; CUDA 13 breaks sccache (C/C++ still cached).
+          CACHE_CUDA=0
+          if [ "$CUDA_SUFFIX" = cuda12 ]; then CACHE_CUDA=1; fi
+          sh .woodpecker/enable-sccache.sh llama.cpp/.devops/cuda.Dockerfile "$CACHE_CUDA"
           SCCACHE_VERSION=0.16.0
           SCCACHE_REGION="$${SCCACHE_REGION:-auto}"
           SCCACHE_S3_USE_SSL="$${SCCACHE_S3_USE_SSL:-true}"

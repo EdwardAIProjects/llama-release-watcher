@@ -7,12 +7,16 @@
 # We patch the upstream file in place rather than maintaining a fork, keeping us
 # at 100% parity with the official Dockerfile apart from the sccache wiring.
 #
-# Usage: enable-sccache.sh <path-to-cuda.Dockerfile>
+# Usage: enable-sccache.sh <path-to-cuda.Dockerfile> [cache_cuda]
+#   cache_cuda = "1" also routes nvcc/CUDA through sccache; anything else caches
+#   C/C++ only. nvcc caching works on CUDA 12 but fails on CUDA 13, so the caller
+#   decides per build.
 set -eu
 
-DF="${1:?usage: enable-sccache.sh <dockerfile>}"
+DF="${1:?usage: enable-sccache.sh <dockerfile> [cache_cuda]}"
+CACHE_CUDA="${2:-0}"
 
-awk '
+awk -v cache_cuda="$CACHE_CUDA" '
   # Declare the sccache/S3 build args + env right after the build stage FROM so
   # the sccache server can read its config and credentials from the environment.
   /^FROM .* AS build$/ {
@@ -56,14 +60,14 @@ awk '
     next
   }
 
-  # Route C/C++ AND CUDA compilation through sccache. nvcc caching previously
-  # broke at the multi-arch fatbinary step with "Could not open input file
-  # *.ptx" on sccache 0.10/0.16; the theory is a parallel per-arch temp-file
-  # race that the sccache --dryrun decomposition cannot reproduce, so we force
-  # nvcc single-threaded (--threads=1) to make it deterministic. If CUDA still
-  # breaks, drop the CUDA launcher and CUDA_FLAGS below to cache only C/C++.
+  # Route C/C++ through sccache, and nvcc/CUDA too only when cache_cuda=1.
+  # nvcc caching works on CUDA 12 but breaks on CUDA 13: sccache mis-parses the
+  # CUDA 13 nvcc --dryrun output and the fatbinary step dies with "Could not
+  # open input file *.ptx". --threads=1 did not help, so it is gated per build.
   /-DLLAMA_BUILD_TESTS=OFF/ {
-    sub(/-DLLAMA_BUILD_TESTS=OFF/, "-DLLAMA_BUILD_TESTS=OFF -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_CUDA_COMPILER_LAUNCHER=sccache -DCMAKE_CUDA_FLAGS=--threads=1")
+    launchers = "-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache"
+    if (cache_cuda == "1") launchers = launchers " -DCMAKE_CUDA_COMPILER_LAUNCHER=sccache"
+    sub(/-DLLAMA_BUILD_TESTS=OFF/, "-DLLAMA_BUILD_TESTS=OFF " launchers)
   }
 
   # Print cache hit/miss stats once the build finishes.

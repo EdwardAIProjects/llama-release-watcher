@@ -45,7 +45,7 @@ Images are pushed to `<docker_registry>/llama-cpp`.
 
 #### Compile caching (sccache) — optional
 
-Builds route C/C++ and CUDA compilation through [sccache](https://github.com/mozilla/sccache) backed by any S3-compatible store, so objects are cached across runs even when Kaniko's layer cache misses. The upstream `cuda.Dockerfile` is patched at build time by `.woodpecker/enable-sccache.sh` — no fork. nvcc caching is brittle (sccache decomposes nvcc via `--dryrun`): CUDA 13 needs nvcc forced single-threaded (`--threads=1`). If it breaks at the `fatbinary` step, drop `-DCMAKE_CUDA_COMPILER_LAUNCHER` from the patch to cache C/C++ only.
+Builds route C/C++ through [sccache](https://github.com/mozilla/sccache) backed by any S3-compatible store, so objects are cached across runs even when Kaniko's layer cache misses. The upstream `cuda.Dockerfile` is patched at build time by `.woodpecker/enable-sccache.sh` — no fork. nvcc is also cached on **CUDA 12**, but not CUDA 13 (sccache mis-parses CUDA 13's nvcc and dies at the `fatbinary` step); both still cache C/C++.
 
 This is **entirely opt-in and configured via secrets** — nothing is hardcoded. sccache is enabled only when all four of the following are set; leave them unset and the build runs without it:
 
