@@ -1,7 +1,7 @@
 # Builds and pushes llama.cpp CUDA Docker images for the release tag recorded
 # in last_release_version.txt.
 #
-# Triggered by any push to main.
+# Triggered by any push to main or manually from Woodpecker.
 #
 # Requirements on the Woodpecker side:
 #   - Secrets: docker_registry, docker_registry_username, docker_registry_key.
@@ -9,6 +9,7 @@
 when:
   - event: push
     branch: main
+  - event: manual
 
 matrix:
   include:
