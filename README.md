@@ -17,7 +17,7 @@ This project solves the need for automated, consistent Docker images of `llama.c
 
 ## Architecture
 
-1. **Check (Windmill):** `windmill/f/llama_watcher/check_release.py` runs every 5 minutes. It queries the GitHub API for the latest release tag and clones this repo (shallow) to compare against `last_release_version.txt`.
+1. **Check (Windmill):** `.windmill/check_release.py` runs every 5 minutes. It queries the GitHub API for the latest release tag and clones this repo (shallow) to compare against `last_release_version.txt`.
 2. **Commit (Windmill):** On a new tag, the script writes the tag to `last_release_version.txt`, commits as `windmill-bot`, and pushes to `main` using an SSH deploy key stored as a Windmill secret.
 3. **Build & Push (Woodpecker):** The push triggers `.woodpecker/build-release.yml`. It clones `llama.cpp` at the committed tag and builds the `server` target of `.devops/cuda.Dockerfile` for CUDA 12 and CUDA 13 (matrix), pushing all tags to the private registry with a registry-backed build cache.
 
@@ -45,14 +45,7 @@ Images are pushed to `<docker_registry>/llama-cpp`.
 
 ### Windmill
 
-Push the script and schedule from the `windmill/` directory:
-
-```bash
-cd windmill
-wmill sync push
-```
-
-The schedule cron is `0 */5 * * * *` (Windmill cron includes a leading seconds field). Script arguments (preset in `check_release.schedule.yaml`):
+Create a Windmill scheduled script from `.windmill/check_release.py` with cron `0 */5 * * * *` (Windmill cron includes a leading seconds field). Script arguments:
 
 | Argument | Description | Default |
 | :--- | :--- | :--- |
