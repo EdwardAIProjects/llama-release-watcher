@@ -4,9 +4,9 @@
 # Triggered by any push to main or manually from Woodpecker.
 #
 # Requirements on the Woodpecker side:
-#   - Secrets: docker_registry, docker_registry_username, docker_registry_key.
-#   - Optional sccache compile cache (all-or-nothing): set sccache_bucket,
-#     sccache_endpoint, aws_access_key_id, aws_secret_access_key to enable it.
+#   - Secrets: DOCKER_REGISTRY, DOCKER_REGISTRY_USERNAME, DOCKER_REGISTRY_KEY.
+#   - Optional sccache compile cache (all-or-nothing): set SCCACHE_BUCKET,
+#     SCCACHE_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY to enable it.
 #     Leave them unset and the build runs without sccache.
 
 when:
@@ -36,17 +36,17 @@ steps:
       UPSTREAM_REPO: ggerganov/llama.cpp
       # sccache S3 config — all optional. Empty/unset means sccache stays off.
       SCCACHE_BUCKET:
-        from_secret: sccache_bucket
+        from_secret: SCCACHE_BUCKET
       SCCACHE_ENDPOINT:
-        from_secret: sccache_endpoint
+        from_secret: SCCACHE_ENDPOINT
       SCCACHE_REGION:
-        from_secret: sccache_region
+        from_secret: SCCACHE_REGION
       SCCACHE_S3_USE_SSL:
-        from_secret: sccache_s3_use_ssl
+        from_secret: SCCACHE_S3_USE_SSL
       AWS_ACCESS_KEY_ID:
-        from_secret: aws_access_key_id
+        from_secret: AWS_ACCESS_KEY_ID
       AWS_SECRET_ACCESS_KEY:
-        from_secret: aws_secret_access_key
+        from_secret: AWS_SECRET_ACCESS_KEY
     commands:
       - RELEASE_TAG="$(cat last_release_version.txt)"
       - git clone --depth 1 --branch "$RELEASE_TAG" "https://github.com/$UPSTREAM_REPO.git" llama.cpp
@@ -94,7 +94,7 @@ steps:
             echo "SCCACHE_S3_KEY_PREFIX=llama-cpp/$CUDA_SUFFIX"
           } >> .kaniko.env
         else
-          echo "==> sccache disabled (set sccache_bucket, sccache_endpoint, aws_access_key_id, aws_secret_access_key to enable)"
+          echo "==> sccache disabled (set SCCACHE_BUCKET, SCCACHE_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY to enable)"
         fi
 
   build-and-push:
@@ -103,17 +103,17 @@ steps:
       # S3 credentials for the sccache backend (empty when sccache is disabled).
       # Kaniko has no secret mounts, so these reach the build as build args.
       AWS_ACCESS_KEY_ID:
-        from_secret: aws_access_key_id
+        from_secret: AWS_ACCESS_KEY_ID
       AWS_SECRET_ACCESS_KEY:
-        from_secret: aws_secret_access_key
+        from_secret: AWS_SECRET_ACCESS_KEY
     settings:
       registry:
-        from_secret: docker_registry
+        from_secret: DOCKER_REGISTRY
       repo: llama-cpp
       username:
-        from_secret: docker_registry_username
+        from_secret: DOCKER_REGISTRY_USERNAME
       password:
-        from_secret: docker_registry_key
+        from_secret: DOCKER_REGISTRY_KEY
       context: llama.cpp
       dockerfile: llama.cpp/.devops/cuda.Dockerfile
       target: server

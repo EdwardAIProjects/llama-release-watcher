@@ -37,9 +37,9 @@ If a build fails, the version file is already committed, so the watcher will not
 2. Add repository secrets:
    | Secret | Description |
    | :--- | :--- |
-   | `docker_registry` | Private registry hostname, for example `registry.example.com` |
-   | `docker_registry_username` | Username for the private registry |
-   | `docker_registry_key` | Password or access key for the private registry |
+   | `DOCKER_REGISTRY` | Private registry hostname, for example `registry.example.com` |
+   | `DOCKER_REGISTRY_USERNAME` | Username for the private registry |
+   | `DOCKER_REGISTRY_KEY` | Password or access key for the private registry |
 
 Images are pushed to `<docker_registry>/llama-cpp`.
 
@@ -51,12 +51,12 @@ This is **entirely opt-in and configured via secrets** — nothing is hardcoded.
 
    | Secret | Description |
    | :--- | :--- |
-   | `sccache_bucket` | Bucket name for the cache |
-   | `sccache_endpoint` | S3 endpoint host (e.g. `s3.example.com`) |
-   | `aws_access_key_id` | Access key for the bucket |
-   | `aws_secret_access_key` | Secret key for the bucket |
+   | `SCCACHE_BUCKET` | Bucket name for the cache |
+   | `SCCACHE_ENDPOINT` | S3 endpoint host (e.g. `s3.example.com`) |
+   | `AWS_ACCESS_KEY_ID` | Access key for the bucket |
+   | `AWS_SECRET_ACCESS_KEY` | Secret key for the bucket |
 
-Optional knobs: `sccache_region` (default `auto`) and `sccache_s3_use_ssl` (default `true`). Cache objects are namespaced per CUDA toolchain under the `llama-cpp/<cuda_suffix>` key prefix.
+Optional knobs: `SCCACHE_REGION` (default `auto`) and `SCCACHE_S3_USE_SSL` (default `true`). Cache objects are namespaced per CUDA toolchain under the `llama-cpp/<cuda_suffix>` key prefix.
 
 Note: Kaniko has no build-time secret mounts, so the credentials are passed as build args and therefore persist in the (private) build-stage cache layers — use a least-privilege, rotatable key scoped to the cache bucket. The published `server` image is a separate build stage and does not contain them.
 
