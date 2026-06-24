@@ -48,6 +48,8 @@ def main(
     branch: str = "main",
     github_token: str = "",
     discord_webhook_url: str = "",
+    git_user_name: str = "windmill-bot",
+    git_user_email: str = "windmill-bot@users.noreply.github.com",
 ):
     headers = {"Accept": "application/vnd.github+json"}
     if github_token:
@@ -102,8 +104,8 @@ def main(
         with open(version_path, "w", encoding="utf-8") as handle:
             handle.write(latest_tag + "\n")
 
-        git("config", "user.name", "windmill-bot")
-        git("config", "user.email", "windmill-bot@users.noreply.github.com")
+        git("config", "user.name", git_user_name)
+        git("config", "user.email", git_user_email)
         git("add", VERSION_FILE)
         git("commit", "-m", f"chore: update last seen release version to {latest_tag}")
         git("push", "origin", branch)

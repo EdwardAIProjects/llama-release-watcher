@@ -71,6 +71,8 @@ Create a Windmill scheduled script from `.windmill/check_release.py` with cron `
 | `branch` | Branch to commit to | `main` |
 | `github_token` | Optional token to raise GitHub API rate limits | (none) |
 | `discord_webhook_url` | Optional Discord webhook URL for new-release notifications, for example from `$var:f/llama_watcher/discord_webhook_url` | (none) |
+| `git_user_name` | Name used for the version-bump commit | `windmill-bot` |
+| `git_user_email` | Email used for the version-bump commit | `windmill-bot@users.noreply.github.com` |
 
 ## Image Tagging Convention
 
