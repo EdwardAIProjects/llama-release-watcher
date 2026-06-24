@@ -20,6 +20,8 @@ awk -v cache_cuda="$CACHE_CUDA" '
   # Declare the sccache/S3 build args + env right after the build stage FROM so
   # the sccache server can read its config and credentials from the environment.
   /^FROM .* AS build$/ {
+    saw_build_stage = 1
+    in_build_stage = 1
     print
     print ""
     print "# --- sccache integration (injected by llama-release-watcher) ---"
@@ -41,13 +43,20 @@ awk -v cache_cuda="$CACHE_CUDA" '
     next
   }
 
+  /^FROM / {
+    in_build_stage = 0
+  }
+
   # curl + ca-certificates are needed to download the sccache release tarball.
-  /apt-get install -y gcc-14/ {
-    sub(/libgomp1/, "libgomp1 curl ca-certificates")
+  in_build_stage && /apt-get install -y/ && /libgomp1/ {
+    if ($0 !~ /curl/) sub(/libgomp1/, "libgomp1 curl")
+    if ($0 !~ /ca-certificates/) sub(/libgomp1/, "libgomp1 ca-certificates")
+    patched_apt = 1
   }
 
   # Install the sccache binary right after the compiler env is set.
-  /^ENV CC=gcc-14/ {
+  in_build_stage && /^ENV CC=/ {
+    installed_sccache = 1
     print
     print ""
     print "RUN curl -fsSL -o /tmp/sccache.tar.gz \\"
@@ -64,14 +73,16 @@ awk -v cache_cuda="$CACHE_CUDA" '
   # nvcc caching works on CUDA 12 but breaks on CUDA 13: sccache mis-parses the
   # CUDA 13 nvcc --dryrun output and the fatbinary step dies with "Could not
   # open input file *.ptx". --threads=1 did not help, so it is gated per build.
-  /-DLLAMA_BUILD_TESTS=OFF/ {
+  in_build_stage && /-DLLAMA_BUILD_TESTS=OFF/ {
+    patched_cmake = 1
     launchers = "-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache"
     if (cache_cuda == "1") launchers = launchers " -DCMAKE_CUDA_COMPILER_LAUNCHER=sccache"
     sub(/-DLLAMA_BUILD_TESTS=OFF/, "-DLLAMA_BUILD_TESTS=OFF " launchers)
   }
 
   # Print cache hit/miss stats once the build finishes.
-  /cmake --build build --config Release/ {
+  in_build_stage && /cmake --build build --config Release/ {
+    patched_stats = 1
     sub(/$/, " \\")
     print
     print "    && sccache --show-stats"
@@ -79,6 +90,29 @@ awk -v cache_cuda="$CACHE_CUDA" '
   }
 
   { print }
+
+  END {
+    if (!saw_build_stage) {
+      print "ERROR: could not find build stage in Dockerfile" > "/dev/stderr"
+      exit 1
+    }
+    if (!patched_apt) {
+      print "ERROR: could not add curl/ca-certificates to build dependencies" > "/dev/stderr"
+      exit 1
+    }
+    if (!installed_sccache) {
+      print "ERROR: could not find compiler ENV line to install sccache after" > "/dev/stderr"
+      exit 1
+    }
+    if (!patched_cmake) {
+      print "ERROR: could not add sccache compiler launcher flags" > "/dev/stderr"
+      exit 1
+    }
+    if (!patched_stats) {
+      print "ERROR: could not add sccache stats command" > "/dev/stderr"
+      exit 1
+    }
+  }
 ' "$DF" > "$DF.sccache.tmp"
 
 mv "$DF.sccache.tmp" "$DF"
